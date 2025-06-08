@@ -133,6 +133,7 @@ def normalize_column_name(name):
     return name.strip().lower().replace(' ', '').replace('-', '').replace('_', '')
 
 # Function to process the CSV data
+@st.cache_data # Add caching to speed up data processing
 def process_csv(df):
     if df.empty:
         st.warning("CSV file is empty or contains only headers.")
@@ -148,7 +149,7 @@ def process_csv(df):
     # Ensure all expected columns exist, fill with None or default if not
     for col in expected_columns:
         if col not in df.columns:
-            st.warning(f"Missing expected column: '{col}'. Filling with default values.")
+            # st.warning(f"Missing expected column: '{col}'. Filling with default values.") # Removed warning for cleaner logs
             df[col] = None
 
     processed_data = []
@@ -202,13 +203,13 @@ def get_sentiment_insights(df):
     insights = []
     if not sorted_sentiments.empty:
         most_common_sentiment = sorted_sentiments.index[0]
-        most_common_percent = (sorted_sentiments.iloc[0] / total * 100).toFixed(1)
-        insights.append(f"**1.** Looks like a good vibe! `{most_common_sentiment}` is the most common sentiment, making up about **{most_common_percent}%** of the buzz.")
+        most_common_percent = (sorted_sentiments.iloc[0] / total * 100)
+        insights.append(f"**1.** Looks like a good vibe! `{most_common_sentiment}` is the most common sentiment, making up about **{most_common_percent:.1f}%** of the buzz.")
 
         if len(sorted_sentiments) > 1:
             least_common_sentiment = sorted_sentiments.index[-1]
-            least_common_percent = (sorted_sentiments.iloc[-1] / total * 100).toFixed(1)
-            insights.append(f"**2.** Keep an eye on `{least_common_sentiment}` sentiment, as it's the least frequent, representing only **{least_common_percent}%**.")
+            least_common_percent = (sorted_sentiments.iloc[-1] / total * 100)
+            insights.append(f"**2.** Keep an eye on `{least_common_sentiment}` sentiment, as it's the least frequent, representing only **{least_common_percent:.1f}%**.")
         else:
             insights.append("**2.** Only one sentiment category found. Consider diversifying content to get varied reactions.")
 
@@ -457,17 +458,24 @@ class PDF(FPDF):
         self.set_font('Arial', '', 12)
         # Process markdown bold for PDF
         body_text_lines = body_text.split('\n')
-        for line in body_text_lines:
+        for line_raw in body_text_lines:
+            line = line_raw.strip()
+            if not line: # Skip empty lines
+                continue
+            if line.startswith('- '): # Handle list items
+                line = line[2:] # Remove '- '
+
             parts = line.split('**')
             for i, part in enumerate(parts):
                 if i % 2 == 1: # Odd parts are bold
                     self.set_font('Arial', 'B', 12)
                 else:
                     self.set_font('Arial', '', 12)
-                self.write(8, part)
-            self.ln(8) # Line height
-        self.ln(8)
+                self.write(8, part) # Write with 8mm line height
+            self.ln(8) # Line height for next line
+        self.ln(8) # Extra space after block
 
+@st.cache_data # Cache the PDF generation for speed
 def generate_pdf_report(processed_df, sentiment_insights, engagement_insights,
                         platform_insights, media_type_insights, location_insights,
                         overall_recommendations):
@@ -544,7 +552,8 @@ st.markdown("</div>", unsafe_allow_html=True) # Close the div
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
-    processed_df = process_csv(df)
+    with st.spinner("Processing your juicy data... Please wait! 🍍"): # Added spinner
+        processed_df = process_csv(df)
 
     if not processed_df.empty:
         st.markdown(
