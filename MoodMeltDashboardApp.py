@@ -1,9 +1,12 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from io import BytesIO
 from fpdf import FPDF # Library for PDF generation in Python
+
+# Import plotly only when needed
+# import plotly.express as px # <-- REMOVED from here
+# import plotly.graph_objects as go # <-- REMOVED from here
+
 
 # --- Define the vibrant fruit-themed color palette ---
 colors = {
@@ -136,7 +139,7 @@ def normalize_column_name(name):
 @st.cache_data # Add caching to speed up data processing
 def process_csv(df):
     if df.empty:
-        st.warning("CSV file is empty or contains only headers.")
+        # st.warning("CSV file is empty or contains only headers.") # Commented to reduce Streamlit Cloud log noise
         return pd.DataFrame()
 
     # Normalize headers
@@ -149,7 +152,6 @@ def process_csv(df):
     # Ensure all expected columns exist, fill with None or default if not
     for col in expected_columns:
         if col not in df.columns:
-            # st.warning(f"Missing expected column: '{col}'. Filling with default values.") # Removed warning for cleaner logs
             df[col] = None
 
     processed_data = []
@@ -174,8 +176,10 @@ def process_csv(df):
     return pd.DataFrame(processed_data)
 
 # --- Chart Generation Functions ---
+# Moved plotly imports inside functions that use them to enable lazy loading
 
 def create_sentiment_pie_chart(df):
+    import plotly.express as px
     sentiment_counts = df['sentiment'].value_counts().reset_index()
     sentiment_counts.columns = ['Sentiment', 'Count']
     fig = px.pie(sentiment_counts,
@@ -219,6 +223,7 @@ def get_sentiment_insights(df):
     return insights
 
 def create_engagement_line_chart(df):
+    import plotly.express as px
     # Ensure 'date' column is datetime and drop rows where it's NaT
     df_clean = df.dropna(subset=['date']).copy()
     df_clean['date'] = pd.to_datetime(df_clean['date'])
@@ -260,6 +265,7 @@ def get_engagement_insights(df):
     return insights
 
 def create_platform_bar_chart(df):
+    import plotly.express as px
     platform_engagements = df.groupby('platform')['engagements'].sum().reset_index()
     platform_engagements = platform_engagements.sort_values('engagements', ascending=False)
     fig = px.bar(platform_engagements,
@@ -286,6 +292,7 @@ def get_platform_insights(df):
     return insights
 
 def create_media_type_pie_chart(df):
+    import plotly.express as px
     media_type_counts = df['mediatype'].value_counts().reset_index()
     media_type_counts.columns = ['MediaType', 'Count']
     fig = px.pie(media_type_counts,
@@ -318,6 +325,7 @@ def get_media_type_insights(df):
     return insights
 
 def create_location_bar_chart(df):
+    import plotly.express as px
     location_counts = df['location'].value_counts().reset_index()
     location_counts.columns = ['Location', 'Count']
     location_counts = location_counts.sort_values('Count', ascending=False).head(5) # Top 5
@@ -546,16 +554,20 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-uploaded_file = st.file_uploader("", type=["csv"])
-
-st.markdown("</div>", unsafe_allow_html=True) # Close the div
+# Added a general spinner for the initial load until file upload
+with st.spinner("Warming up the oven... Your MoodMelt dashboard is getting ready! 🥭"):
+    uploaded_file = st.file_uploader("", type=["csv"])
 
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
-    with st.spinner("Processing your juicy data... Please wait! 🍍"): # Added spinner
+    with st.spinner("Slicing and dicing your data... 🥝"): # Specific spinner for data processing
         processed_df = process_csv(df)
 
     if not processed_df.empty:
+        # After processing, import plotly (lazy loading)
+        import plotly.express as px
+        import plotly.graph_objects as go
+
         st.markdown(
             f"""
             <div style="
@@ -699,4 +711,3 @@ if uploaded_file is not None:
         )
 
         st.markdown(f'<p style="text-align: center; font-size: 1.125rem; margin-top: 2rem; color: {colors["darkPink"]};">That\'s it! Your MoodMelt dashboard is brimming with insights. Keep crushing it! 🎉</p>', unsafe_allow_html=True)
-
